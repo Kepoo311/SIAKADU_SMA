@@ -1,0 +1,109 @@
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 2000;
+    display: grid;
+    gap: 10px;
+    width: min(440px, calc(100vw - 40px));
+    pointer-events: none;
+}
+
+.toast-container .app-toast {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 16px 46px 16px 18px;
+    border: 1px solid transparent;
+    border-left-width: 5px;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(18, 38, 63, 0.2);
+    color: #26364d;
+    font: 500 14px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow-wrap: anywhere;
+    pointer-events: auto;
+    animation: toast-enter 180ms ease-out both;
+}
+
+.toast-container .app-toast-success {
+    border-color: #a7e0bd;
+    border-left-color: #239653;
+    color: #1c6037;
+}
+
+.toast-container .app-toast-error {
+    border-color: #f0b4b8;
+    border-left-color: #d63845;
+    color: #8f202a;
+}
+
+.toast-container .app-toast-warning {
+    border-color: #f0d58b;
+    border-left-color: #c48712;
+    color: #75520c;
+}
+
+.toast-container .app-toast-exit {
+    animation: toast-exit 180ms ease-in both;
+    pointer-events: none;
+}
+
+.toast-container .toast-dismiss {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #526176;
+    cursor: pointer;
+    font: 400 24px/1 system-ui, sans-serif;
+}
+
+.toast-container .toast-dismiss:hover,
+.toast-container .toast-dismiss:focus-visible {
+    background: #eef2f8;
+    outline: none;
+}
+
+@keyframes toast-enter {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes toast-exit {
+    to {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+}
+
+@media (max-width: 480px) {
+    .toast-container {
+        top: 12px;
+        right: 12px;
+        width: calc(100vw - 24px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .toast-container .app-toast,
+    .toast-container .app-toast-exit {
+        animation: none;
+    }
+}

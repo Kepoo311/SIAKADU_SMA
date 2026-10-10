@@ -1,0 +1,483 @@
+PANDUAN INSTALASI SIAKADU DI UBUNTU SERVER
+==========================================
+
+Panduan ini merangkum deploy percobaan SIAKADU pada Ubuntu Server melalui
+PuTTY (perintah dijalankan di server) dan WinSCP (pemindahan file dari
+Windows). Contoh server yang digunakan:
+
+  IP server       : IP_SERVER
+  User SSH        : USER_UBUNTU
+  Folder web      : /var/www/html/siakadu
+  Database        : siakadu
+  User database   : siakadu_app
+  Folder sementara: /home/USER_UBUNTU
+
+Ganti IP, nama user, dan lokasi jika berbeda dengan server Anda. Jangan
+mengirim password database atau data pribadi siswa ke chat. Panduan ini
+ditujukan untuk percobaan di jaringan lokal, bukan server produksi publik.
+
+
+1. SIAPKAN UBUNTU SERVER DAN AKSES SSH
+--------------------------------------
+
+Pasang Ubuntu Server pada VM/komputer server, sambungkan ke jaringan lokal,
+dan pastikan alamat IP-nya diketahui. Masuk dari Windows menggunakan PuTTY
+dengan alamat IP server dan port SSH 22. Login sebagai user Ubuntu, misalnya
+`USER_UBUNTU`. Ganti placeholder `IP_SERVER` dan `USER_UBUNTU` di contoh
+perintah dengan nilai server Anda sebelum menjalankannya.
+
+Perintah pembaruan paket:
+
+  sudo apt update
+  sudo apt upgrade -y
+
+Arti:
+  sudo        Menjalankan perintah dengan hak administrator.
+  apt update  Memperbarui daftar paket dari repositori.
+  apt upgrade Memasang pembaruan paket yang tersedia.
+  -y          Menjawab "yes" otomatis pada konfirmasi.
+
+
+2. PASANG APACHE, MARIADB, DAN PHP
+----------------------------------
+
+Jalankan:
+
+  sudo apt install apache2 mariadb-server php libapache2-mod-php php-mysql -y
+
+Arti paket:
+  apache2          Web server yang menerima permintaan browser.
+  mariadb-server   Server database yang kompatibel dengan MySQL.
+  php              Interpreter PHP.
+  libapache2-mod-php Penghubung PHP dengan Apache (mod_php).
+  php-mysql        Driver MySQL/MariaDB untuk PHP, termasuk PDO MySQL.
+
+Aktifkan layanan saat server dinyalakan dan jalankan sekarang:
+
+  sudo systemctl enable --now apache2
+  sudo systemctl enable --now mariadb
+
+Arti:
+  systemctl enable Membuat layanan otomatis mulai saat boot.
+  --now            Sekaligus menjalankan layanan sekarang.
+
+Periksa versi dan modul PHP:
+
+  php -v
+  php -m | grep -E 'PDO|pdo_mysql'
+
+`php -v` menampilkan versi PHP; perintah kedua memastikan PDO dan driver
+pdo_mysql tersedia. Periksa Apache:
+
+  sudo apache2ctl -M | grep -E 'php|mpm'
+
+Untuk konfigurasi yang digunakan pada deploy ini, hasil mencakup
+`php_module` dan `mpm_prefork_module`. Periksa respons awal Apache:
+
+  curl -I http://localhost/
+
+`curl -I` hanya meminta header HTTP. Respons HTTP 200 dari halaman default
+menunjukkan Apache merespons. Peringatan `AH00558` tentang ServerName adalah
+peringatan nama server; bukan kegagalan layanan.
+
+
+3. SIAPKAN DATABASE
+-------------------
+
+Masuk ke MariaDB sebagai administrator Ubuntu:
+
+  sudo mariadb
+
+Prompt berubah menjadi MariaDB. Jalankan perintah SQL satu per satu:
+
+  CREATE DATABASE siakadu CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+  CREATE USER 'siakadu_app'@'localhost' IDENTIFIED BY 'GANTI_DENGAN_PASSWORD_KUAT';
+  GRANT SELECT, INSERT, UPDATE, DELETE ON siakadu.* TO 'siakadu_app'@'localhost';
+  FLUSH PRIVILEGES;
+  EXIT;
+
+Ganti teks `GANTI_DENGAN_PASSWORD_KUAT` di terminal dengan password yang
+Anda pilih; jangan gunakan teks contoh tersebut sebagai password. Simpan
+password di tempat aman. `CREATE DATABASE` membuat database kosong,
+`CREATE USER` membuat akun khusus aplikasi, `GRANT` memberikan hak baca/tulis
+data dasar tanpa hak mengubah skema, dan `EXIT` keluar dari prompt MariaDB.
+
+Jangan gunakan akun root MariaDB untuk koneksi aplikasi. Jika database atau
+user sudah pernah dibuat, jangan membuat duplikat; gunakan akun dan database
+yang sudah ada.
+
+
+4. PASANG STRUKTUR TABEL (SCHEMA)
+--------------------------------
+
+Schema proyek berada di `DB/schema.sql`. Transfer folder proyek ke server
+dengan WinSCP. Untuk langkah-langkah berikut, contoh menganggap folder
+proyek sudah tersedia di `/home/USER_UBUNTU/SIAKADU`.
+
+Impor schema ke database yang masih kosong:
+
+  sudo mariadb siakadu < /home/USER_UBUNTU/SIAKADU/DB/schema.sql
+
+Arti:
+  sudo mariadb siakadu  Membuka klien MariaDB sebagai administrator untuk
+                        database siakadu.
+  < file.sql           Mengalirkan isi file SQL tersebut sebagai input.
+
+Schema membuat tabel dan role bawaan aplikasi, tetapi tidak membuat akun
+pengguna atau data sekolah. Schema ditujukan untuk database baru/kosong.
+Jangan impor ulang schema ke database yang sudah berisi tabel/data.
+
+
+5. PINDAHKAN DATA DARI LARAGON (JIKA DIPERLUKAN)
+------------------------------------------------
+
+Jika ingin membawa data lokal, ekspor data dari database Laragon sebagai
+dump data-only (tanpa struktur tabel). Jangan sertakan tabel `role`, karena
+role bawaan sudah dibuat oleh schema. Simpan dump, misalnya, sebagai:
+
+  C:\Users\NAMA_USER_WINDOWS\Desktop\siakadu-data.sql
+
+Unggah dump menggunakan WinSCP ke:
+
+  /home/USER_UBUNTU/siakadu-data.sql
+
+Pastikan schema sudah berhasil diimpor sebelum mengimpor data. Pada dump
+yang dihasilkan sebelumnya, urutan tabel menyebabkan sebagian baris absensi
+datang sebelum baris siswa yang dirujuk. Karena itu, impor dilakukan dengan
+menonaktifkan pemeriksaan foreign key hanya pada sesi impor:
+
+  sudo mariadb siakadu
+
+Pada prompt MariaDB, jalankan:
+
+  SET FOREIGN_KEY_CHECKS=0;
+  SOURCE /home/USER_UBUNTU/siakadu-data.sql;
+  SET FOREIGN_KEY_CHECKS=1;
+  EXIT;
+
+`SOURCE` membaca dan menjalankan file SQL pada server. Pemeriksaan foreign
+key dimatikan sementara karena urutan insert di dump, lalu langsung
+diaktifkan kembali. Jangan mengosongkan database atau mengulang impor tanpa
+memeriksa isi tabel terlebih dahulu; impor ulang dapat membuat data ganda
+atau gagal karena primary key sudah ada.
+
+Pemeriksaan jumlah data contoh:
+
+  sudo mariadb siakadu -e "SELECT COUNT(*) AS jumlah_siswa FROM siswa;"
+
+`-e` menjalankan SQL yang diberikan lalu keluar. Bandingkan hasil dengan
+data sumber Anda. File dump berisi data, sehingga simpan di luar webroot dan
+jangan membukanya sebagai halaman web.
+
+
+6. SALIN APLIKASI KE WEBROOT
+----------------------------
+
+Pastikan folder aplikasi telah diunggah dengan WinSCP ke
+`/home/USER_UBUNTU/SIAKADU`. Salin ke lokasi yang akan dilayani Apache:
+
+  sudo mkdir -p /var/www/html/siakadu
+  sudo cp -a /home/USER_UBUNTU/SIAKADU/. /var/www/html/siakadu/
+
+Arti:
+  mkdir -p Membuat folder tujuan, termasuk folder induk bila belum ada.
+  cp -a   Menyalin seluruh isi dan mempertahankan atribut file sedapatnya.
+  `/.`    Menyalin isi folder sumber, termasuk file tersembunyi seperti
+          `.htaccess`.
+
+Atur kepemilikan dan permission:
+
+  sudo chown -R root:www-data /var/www/html/siakadu
+  sudo find /var/www/html/siakadu -type d -exec chmod 750 {} \;
+  sudo find /var/www/html/siakadu -type f -exec chmod 640 {} \;
+
+Arti:
+  chown -R root:www-data Mengatur pemilik menjadi root dan grup menjadi
+                         www-data untuk semua isi folder.
+  find ... -type d       Memilih direktori.
+  find ... -type f       Memilih file.
+  chmod 750 direktori    Root dapat membaca/menulis/masuk; grup www-data
+                         dapat membaca/masuk; pengguna lain tidak mendapat
+                         akses.
+  chmod 640 file         Root dapat membaca/menulis; grup www-data dapat
+                         membaca; pengguna lain tidak mendapat akses.
+
+Apache berjalan sebagai `www-data`, sehingga dapat membaca file. User SSH
+mungkin mendapat `Permission denied` saat membaca folder tersebut secara
+langsung; gunakan `sudo ls -l ...` untuk memeriksa. Jangan menggunakan
+permission `777` dan jangan menjadikan seluruh aplikasi writable oleh
+Apache.
+
+
+7. AKTIFKAN MOD_REWRITE APACHE
+------------------------------
+
+  sudo a2enmod rewrite
+
+`a2enmod` mengaktifkan modul Apache. `rewrite` diperlukan oleh `.htaccess`
+aplikasi untuk mengarahkan URL yang sesuai. Jika hasilnya menyebut modul
+sudah aktif, tidak perlu melakukan tindakan tambahan.
+
+
+8. BUAT VIRTUAL HOST APACHE
+---------------------------
+
+Buat file konfigurasi:
+
+  sudo nano /etc/apache2/sites-available/siakadu.conf
+
+`nano` adalah editor teks terminal. Masukkan konfigurasi berikut. Ganti
+password placeholder dengan password MariaDB untuk `siakadu_app` langsung
+di editor server—jangan menaruh password asli ke dokumen panduan atau chat.
+
+  <VirtualHost *:80>
+      ServerName IP_SERVER
+      DocumentRoot /var/www/html/siakadu
+
+      SetEnv SIAKADU_DB_HOST localhost
+      SetEnv SIAKADU_DB_NAME siakadu
+      SetEnv SIAKADU_DB_USER siakadu_app
+      SetEnv SIAKADU_DB_PASSWORD GANTI_DENGAN_PASSWORD_DB
+
+      <Directory /var/www/html/siakadu>
+          Options -Indexes +FollowSymLinks
+          AllowOverride All
+          Require all granted
+      </Directory>
+
+      <Directory /var/www/html/siakadu/DB>
+          Require all denied
+      </Directory>
+
+      <Directory /var/www/html/siakadu/Middleware>
+          Require all denied
+      </Directory>
+
+      ErrorLog ${APACHE_LOG_DIR}/siakadu_error.log
+      CustomLog ${APACHE_LOG_DIR}/siakadu_access.log combined
+  </VirtualHost>
+
+`ServerName` adalah nama/alamat situs, `DocumentRoot` adalah folder aplikasi,
+dan `SetEnv` memberikan konfigurasi koneksi database kepada PHP. Nilai
+`SIAKADU_DB_HOST` harus cocok dengan host akun MariaDB; contoh ini memakai
+`localhost` dan akun `'siakadu_app'@'localhost'`. Jika koneksi Anda sudah
+berhasil menggunakan host lain, pertahankan pasangan host dan grant yang
+sudah diuji.
+
+`AllowOverride All` mengizinkan aturan `.htaccess`; `Options -Indexes`
+mencegah daftar isi folder ditampilkan; `Require all denied` melindungi
+folder DB dan Middleware dari akses web langsung. Jangan hapus aturan blokir
+folder sensitif.
+
+Simpan file di nano:
+  Ctrl+O, tekan Enter untuk mengonfirmasi nama, lalu Ctrl+X untuk keluar.
+
+Periksa sintaks sebelum mengaktifkan situs:
+
+  sudo apache2ctl configtest
+
+Lanjutkan hanya jika keluar `Syntax OK`. Setelah itu:
+
+  sudo a2ensite siakadu.conf
+  sudo a2dissite 000-default.conf
+  sudo apache2ctl configtest
+  sudo systemctl reload apache2
+
+Arti:
+  a2ensite  Mengaktifkan konfigurasi situs.
+  a2dissite Menonaktifkan situs default Apache.
+  configtest Memeriksa sintaks konfigurasi.
+  reload    Memuat konfigurasi baru tanpa mematikan Apache sepenuhnya.
+
+Lindungi file konfigurasi yang menyimpan password:
+
+  sudo chown root:root /etc/apache2/sites-available/siakadu.conf
+  sudo chmod 640 /etc/apache2/sites-available/siakadu.conf
+  sudo apache2ctl configtest
+
+Apache membaca konfigurasi ketika dijalankan sebagai root; file tersebut
+tidak perlu bisa dibaca oleh semua pengguna. Jangan menampilkan atau
+mengirimkan isi file ini karena memuat password database.
+
+
+9. UJI APLIKASI
+---------------
+
+Uji respons root aplikasi dari server:
+
+  curl -I http://localhost/
+
+Aplikasi dapat mengalihkan root ke halaman login, jadi respons `302 Found`
+dengan lokasi login merupakan hasil yang wajar.
+
+Uji bahwa file schema tidak dapat diakses lewat browser:
+
+  curl -I http://localhost/DB/schema.sql
+
+Hasil yang diharapkan adalah `403 Forbidden`.
+
+Dari browser komputer Windows pada jaringan yang sama, buka:
+
+  http://IP_SERVER/
+
+Halaman login SIAKADU seharusnya tampil. Coba login dengan akun aplikasi
+yang sudah ada di database (akun sekolah), bukan akun database
+`siakadu_app`. Jika login berhasil, Apache, PHP, dan koneksi database sudah
+bekerja bersama.
+
+
+10. MEMPERBARUI FILE APLIKASI
+-----------------------------
+
+Untuk pembaruan kode aplikasi:
+
+1. Buat salinan cadangan sebelum menimpa file:
+
+     sudo cp -a /var/www/html/siakadu /var/www/html/siakadu-backup-$(date +%Y%m%d-%H%M%S)
+
+   `cp -a` menyalin aplikasi beserta atribut file; format tanggal/waktu
+   membuat nama cadangan berbeda setiap kali. Pastikan ruang disk mencukupi.
+
+2. Dari Windows, unggah versi proyek terbaru dengan WinSCP ke folder
+   sementara `/home/USER_UBUNTU/SIAKADU`. Jangan mengunggah dump database ke
+   webroot.
+
+3. Salin file aplikasi terbaru ke webroot:
+
+     sudo cp -a /home/USER_UBUNTU/SIAKADU/. /var/www/html/siakadu/
+
+   Ini menimpa file aplikasi dengan versi yang baru. Jangan menimpa atau
+   menghapus `/etc/apache2/sites-available/siakadu.conf`; file itu memuat
+   konfigurasi dan password database, lokasinya terpisah dari source.
+
+4. Kembalikan pemilik dan permission aman:
+
+     sudo chown -R root:www-data /var/www/html/siakadu
+     sudo find /var/www/html/siakadu -type d -exec chmod 750 {} \;
+     sudo find /var/www/html/siakadu -type f -exec chmod 640 {} \;
+
+5. Jika perubahan hanya pada file PHP, CSS, JavaScript, atau gambar, Apache
+   biasanya langsung melayani file baru—tidak perlu restart. Periksa situs
+   melalui browser dan lakukan refresh penuh bila browser masih memakai
+   cache (Ctrl+F5).
+
+6. Jika pembaruan juga mengubah konfigurasi Apache, uji lalu muat ulang:
+
+     sudo apache2ctl configtest
+     sudo systemctl reload apache2
+
+   Jangan reload jika `configtest` tidak menghasilkan `Syntax OK`.
+
+Jangan mengimpor ulang `DB/schema.sql` atau dump data hanya untuk pembaruan
+kode. Jika pembaruan memiliki migrasi database, baca instruksi migrasinya,
+buat backup database lebih dahulu, lalu jalankan migrasi yang sesuai satu
+kali saja. Backup kode di atas tidak menggantikan backup database.
+
+Untuk memulihkan backup kode, lihat nama folder backup yang ada:
+
+  sudo ls -ld /var/www/html/siakadu-backup-*
+
+Pulihkan dengan menyalin isi backup yang dipilih, bukan menghapus database:
+
+  sudo cp -a /var/www/html/siakadu-backup-NAMA_BACKUP/. /var/www/html/siakadu/
+  sudo chown -R root:www-data /var/www/html/siakadu
+  sudo find /var/www/html/siakadu -type d -exec chmod 750 {} \;
+  sudo find /var/www/html/siakadu -type f -exec chmod 640 {} \;
+
+Ganti `NAMA_BACKUP` dengan nama folder backup yang benar.
+
+
+11. RESTART ATAU SHUTDOWN VM
+----------------------------
+
+Jika layanan diaktifkan dengan perintah berikut, Apache dan MariaDB akan
+otomatis berjalan kembali ketika Ubuntu selesai boot:
+
+  sudo systemctl enable --now apache2
+  sudo systemctl enable --now mariadb
+
+`enable` mengatur auto-start layanan saat boot Ubuntu; `--now` juga
+menjalankannya saat itu. Ini tidak selalu menyalakan VM itu sendiri ketika
+komputer host dimatikan. Auto-start VM diatur terpisah melalui software
+virtualisasi (misalnya pengaturan autostart VirtualBox/VMware atau layanan
+host). Jika VM dimulai manual dari aplikasi virtualisasi, layanan Ubuntu
+akan mulai otomatis setelah sistem operasi boot.
+
+Periksa pengaturan auto-start layanan:
+
+  systemctl is-enabled apache2 mariadb
+  systemctl is-active apache2 mariadb
+
+Hasil ideal untuk kedua layanan adalah `enabled` dan `active`. `enabled`
+berarti otomatis dimulai saat boot; `active` berarti sedang berjalan
+sekarang. Jika belum `enabled`, aktifkan:
+
+  sudo systemctl enable apache2 mariadb
+
+Untuk restart Ubuntu dengan aman:
+
+  sudo reboot
+
+Untuk mematikan Ubuntu:
+
+  sudo poweroff
+
+SSH/PuTTY akan terputus ketika reboot atau shutdown; ini normal. Tunggu VM
+selesai boot lalu sambungkan lagi dengan PuTTY. Periksa alamat IP karena
+DHCP dapat memberinya alamat berbeda:
+
+  hostname -I
+
+Kemudian uji layanan dan aplikasi:
+
+  systemctl is-active apache2 mariadb
+  curl -I http://localhost/
+
+Buka alamat IP terbaru dari browser komputer di jaringan yang sama.
+Database dan file aplikasi tersimpan di disk virtual, sehingga seharusnya
+tetap ada setelah restart/shutdown normal. Jangan mengembalikan snapshot
+lama atau menghapus disk virtual jika ingin mempertahankan perubahan terbaru.
+
+
+12. PEMECAHAN MASALAH SINGKAT
+-----------------------------
+
+Lihat status layanan:
+
+  sudo systemctl status apache2
+  sudo systemctl status mariadb
+
+Lihat pesan error Apache terbaru:
+
+  sudo tail -n 50 /var/log/apache2/siakadu_error.log
+
+Pastikan file ada dan permission benar:
+
+  sudo ls -l /var/www/html/siakadu/index.php
+  sudo ls -l /var/www/html/siakadu/DB/schema.sql
+
+Jika Apache menampilkan error koneksi database, pastikan nama database,
+user, password, dan host di `siakadu.conf` sama dengan akun MariaDB.
+Sesudah mengubah konfigurasi Apache, selalu jalankan:
+
+  sudo apache2ctl configtest
+  sudo systemctl reload apache2
+
+Jika `configtest` tidak menampilkan `Syntax OK`, jangan reload sebelum
+kesalahan konfigurasi diperbaiki.
+
+
+CATATAN KEAMANAN DAN BATAS PENGGUNAAN
+=====================================
+
+- Konfigurasi ini adalah untuk uji coba dalam LAN melalui HTTP, bukan
+  deployment publik/produksi.
+- Jangan membuka port server ke internet tanpa menyiapkan HTTPS, firewall,
+  backup, pengelolaan rahasia, serta konfigurasi produksi yang sesuai.
+- Jangan mengirim password database, dump, atau data pribadi ke chat.
+- Simpan file dump di luar `/var/www/html`.
+- Jangan menjalankan `chmod -R 777`.
+- Schema hanya untuk database baru/kosong. Backup database sebelum perubahan
+  skema atau impor ulang data.
+- Untuk fresh install tanpa data Laragon, buat database kosong dan impor
+  `DB/schema.sql`, lalu siapkan akun admin aplikasi sesuai prosedur proyek.

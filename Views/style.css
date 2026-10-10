@@ -1,0 +1,200 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+@import url('toast.css');
+* {
+    margin: 0;
+    padding: 0;
+    font-family: 'Poppins', sans-serif;
+}
+
+body{
+    min-height: 100vh;
+}
+
+.box{
+    display: flex;
+    flex-direction: row;
+    min-height: 100vh;
+}
+
+.box .title{
+    flex: 0 0 60%;
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-image:
+    linear-gradient(
+                    to bottom, 
+                    rgba(37, 74, 155, 0.7) 14%,
+                    rgba(12, 36, 83, 0.85) 56%,
+                    rgba(0, 22, 59, 0.95) 100%
+                ), 
+    url("../public/img/smk4.jpg");
+    background-size: cover;
+    background-position: center;
+}
+
+.box .title h2{
+    color: white;
+    font-size: clamp(24px, 3vw, 36px);
+    font-weight: 600;
+    padding: 24px;
+    text-align: center;
+}
+
+.box .login_form{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    flex: 1 1 0;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 40px clamp(20px, 4vw, 56px);
+}
+
+.box .login_form h1{
+    font-size: 35px;
+    font-weight: 600;
+}
+
+.box .login_form .deks{
+    font-size: 17px;
+    padding-bottom: 20px;
+    color: #8E8E8E;
+}
+
+.box .login_form input{
+    box-sizing: border-box;
+    border-radius: 8px;
+    border: 1px solid #706f6f;
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 12px 10px 48px;
+    outline: none;
+}
+
+.box .login_form button{
+    border: none;
+    width: 100%;
+    padding: 10px;
+    background-color: #2563EB;
+    border-radius: 8px;
+    color: white;
+    transition: 0.5s ease-in-out all;
+    cursor: pointer;
+}
+
+.box .login_form button:hover {
+    background-color: #0044d8;
+}
+
+
+.box .login_form .deks2{
+    font-size: 14px;
+    padding-top: 20px;
+    justify-self: center;
+}
+
+.box .login_form .deks2 a{
+    text-decoration: none;
+}
+
+.box .login_form .input_i{
+    position: relative;
+    width: 100%;
+    margin-bottom: 10px;
+}
+.box .login_form .input_i img{
+    position: absolute;
+    top: 50%;
+    left: 4px;
+    transform: translateY(-50%);
+    width: 24px;
+}
+.box .login_form img {
+    pointer-events: none;
+}
+
+.box .login_form form {
+    width: 100%;
+    max-width: 360px;
+}
+
+.box .login_form .login_error {
+    color: #b42318;
+    background-color: #fef3f2;
+    border: 1px solid #fecdca;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+
+@media (min-width: 701px) and (max-width: 900px) {
+    .box .title {
+        flex-basis: 55%;
+    }
+
+    .box .login_form {
+        padding-right: 24px;
+        padding-left: 24px;
+    }
+}
+
+@media (max-width: 700px) {
+    body,
+    .box {
+        min-height: 100vh;
+        min-height: 100svh;
+    }
+
+    .box {
+        flex-direction: column;
+    }
+
+    .box .title {
+        flex: 0 0 auto;
+        width: 100%;
+        min-height: 180px;
+        min-height: clamp(150px, 25svh, 230px);
+        background-position: center 45%;
+    }
+
+    .box .title h2 {
+        font-size: clamp(22px, 6vw, 30px);
+    }
+
+    .box .login_form {
+        flex: 1 0 auto;
+        width: 100%;
+        padding: 36px 24px;
+    }
+
+    .box .login_form h1 {
+        font-size: 30px;
+    }
+
+    .box .login_form .deks {
+        font-size: 15px;
+        text-align: center;
+    }
+}
+
+@media (max-width: 360px) {
+    .box .login_form {
+        padding-right: 18px;
+        padding-left: 18px;
+    }
+}
+
+@media (max-height: 500px) and (max-width: 700px) {
+    .box .title {
+        min-height: 120px;
+    }
+
+    .box .login_form {
+        padding-top: 24px;
+        padding-bottom: 24px;
+    }
+}
